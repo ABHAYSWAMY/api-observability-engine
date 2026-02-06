@@ -12,9 +12,12 @@ from django.utils import timezone
 from django.core.management import call_command
 from datetime import timedelta
 import logging
-
 from .aggregation import aggregate_metrics
 from .policies import evaluate_policies
+from django.core.mail import send_mail
+from django.conf import settings
+from core.models import AlertEvent
+
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +102,39 @@ def cleanup_raw_metrics_task(self):
     except Exception as e:
         logger.error(f"Cleanup task failed: {e}")
         raise  # Re-raise for Celery retry logic
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=30,
+    retry_kwargs={"max_retries": 3},
+)
+def send_alert_email_task(self, alert_event_id):
+    alert = (
+        AlertEvent.objects
+        .select_related("policy", "policy__project", "policy__project__owner")
+        .get(id=alert_event_id)
+    )
+
+    subject = f"[ALERT] {alert.policy.metric} violated"
+
+    body = f"""
+🚨 Alert Triggered
+
+Project: {alert.policy.project.name}
+Metric: {alert.policy.metric}
+Threshold: {alert.policy.threshold}
+Actual Value: {alert.value}
+Severity: {alert.policy.severity}
+Triggered At: {alert.triggered_at}
+
+Please investigate.
+"""
+
+    send_mail(
+        subject,
+        body,
+        settings.DEFAULT_FROM_EMAIL,
+        [alert.policy.project.owner.email],
+        fail_silently=False,
+    )

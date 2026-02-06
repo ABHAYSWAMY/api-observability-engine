@@ -16,6 +16,9 @@ from django.db import transaction
 from datetime import timedelta
 from typing import Union, Optional
 from .models import AlertPolicy, AlertEvent, AggregatedMetric
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_metric_value(policy_metric: str, aggregated_metric: AggregatedMetric) -> float:
@@ -135,6 +138,7 @@ def evaluate_policies(aggregated_metric: AggregatedMetric) -> int:
        - Policy is violated
        - Policy is not in cooldown
        - Alert doesn't already exist (idempotency via unique constraints)
+    5. Triggers async email notification via Celery for new alerts
 
     Args:
         aggregated_metric: AggregatedMetric instance to evaluate
@@ -154,7 +158,8 @@ def evaluate_policies(aggregated_metric: AggregatedMetric) -> int:
 
         Side effects:
         - Creates AlertEvent records in the database
-        - No external API calls, emails, or side effects beyond DB writes
+        - Queues email tasks to Celery for async delivery
+        - Email failures are logged but don't fail the evaluation
     """
     alerts_created = 0
 
@@ -195,12 +200,35 @@ def evaluate_policies(aggregated_metric: AggregatedMetric) -> int:
 
                 if created:
                     alerts_created += 1
+                    
+                    # Queue email task AFTER transaction commits to avoid race condition
+                    # Import here to avoid circular dependency
+                    from .tasks import send_alert_email_task
+                    
+                    def queue_email():
+                        try:
+                            send_alert_email_task.delay(alert_event.id)
+                            logger.info(
+                                f"Email task queued for alert {alert_event.id} "
+                                f"(policy: {policy.name}, value: {metric_value})"
+                            )
+                        except Exception as email_error:
+                            # Log but don't fail the policy evaluation
+                            # Alert is already created; email failure shouldn't break monitoring
+                            logger.error(
+                                f"Failed to queue email for alert {alert_event.id}: {email_error}",
+                                extra={
+                                    "alert_id": alert_event.id,
+                                    "policy_id": policy.id,
+                                }
+                            )
+                    
+                    # Defer email task until after transaction commits
+                    transaction.on_commit(queue_email)
 
         except ValueError as e:
             # Log policy metric type errors, but continue evaluating other policies
             # This prevents a single malformed policy from breaking all evaluations
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(
                 f"Policy {policy.id} evaluation error: {e}",
                 extra={
