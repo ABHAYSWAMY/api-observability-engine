@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-from .models import APIKey, RequestMetric, Project
+from .models import APIKey, RequestMetric, Project, AggregatedMetric, AlertPolicy, AlertEvent
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 
@@ -113,3 +113,85 @@ def list_raw_metrics(request, project_id):
     ]
 
     return Response(data)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_aggregated_metrics(request, project_id):
+    project = get_object_or_404(
+        Project,
+        id=project_id,
+        owner=request.user,
+    )
+
+    bucket = request.GET.get("bucket", "1m")
+    start = request.GET.get("from")
+    end = request.GET.get("to")
+
+    qs = AggregatedMetric.objects.filter(
+        project=project,
+        bucket_size=bucket,
+    )
+
+    if start:
+        qs = qs.filter(bucket_start__gte=start)
+    if end:
+        qs = qs.filter(bucket_start__lte=end)
+
+    qs = qs.order_by("bucket_start")
+
+    return Response([
+        {
+            "bucket_start": m.bucket_start,
+            "request_count": m.request_count,
+            "error_count": m.error_count,
+            "p95_latency_ms": m.p95_latency_ms,
+        }
+        for m in qs
+    ])
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_policies(request, project_id):
+    project = get_object_or_404(
+        Project, id=project_id, owner=request.user
+    )
+
+    policies = AlertPolicy.objects.filter(project=project)
+
+    return Response([
+        {
+            "id": p.id,
+            "metric": p.metric,
+            "comparison": p.comparison,
+            "threshold": p.threshold,
+            "cooldown_minutes": p.cooldown_minutes,
+            "severity": p.severity,
+            "is_active": p.is_active,
+        }
+        for p in policies
+    ])
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_alerts(request, project_id):
+    project = get_object_or_404(
+        Project, id=project_id, owner=request.user
+    )
+
+    alerts = (
+        AlertEvent.objects
+        .filter(policy__project=project)
+        .select_related("policy")
+        .order_by("-triggered_at")
+    )
+
+    return Response([
+        {
+            "metric": a.policy.metric,
+            "threshold": a.policy.threshold,
+            "value": a.value,
+            "severity": a.policy.severity,
+            "triggered_at": a.triggered_at,
+        }
+        for a in alerts
+    ])

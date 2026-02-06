@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from core.views import IngestMetricView,whoami,list_projects, list_raw_metrics
+from core.views import IngestMetricView,whoami,list_projects, list_raw_metrics, list_aggregated_metrics, get_alerts, get_policies
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -24,4 +24,7 @@ urlpatterns = [
     path("api/whoami", whoami),
     path("api/projects", list_projects),
     path("api/projects/<uuid:project_id>/metrics", list_raw_metrics),
+    path("api/projects/<uuid:project_id>/metrics/aggregated",list_aggregated_metrics),
+    path("api/projects/<uuid:project_id>/policies", get_policies),
+    path("api/projects/<uuid:project_id>/alerts", get_alerts),
 ]
