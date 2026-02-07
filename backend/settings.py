@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -140,3 +143,13 @@ EMAIL_HOST_USER = "abhayswamy9@gmail.com"
 EMAIL_HOST_PASSWORD = "gefwwuscchpxnqkq"   # <-- app password, no spaces
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+load_dotenv()
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL", "sqlite:///db.sqlite3"),
+        conn_max_age=600,
+        ssl_require=True,
+    )
+}
