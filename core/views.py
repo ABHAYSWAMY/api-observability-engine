@@ -1,11 +1,16 @@
 from django.shortcuts import render, get_object_or_404
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-from .models import APIKey, RequestMetric, Project, AggregatedMetric, AlertPolicy, AlertEvent
-from rest_framework.permissions import IsAuthenticated
+from datetime import timezone as dt_timezone
+from .models import APIKey, RequestMetric, Project, AggregatedMetric, AlertPolicy, AlertEvent, generate_api_key
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import api_view, permission_classes
 
 class IngestMetricView(APIView):
@@ -50,7 +55,7 @@ class IngestMetricView(APIView):
             )
         
         if timezone.is_naive(timestamp):
-            timestamp = timezone.make_aware(timestamp, timezone.utc)
+            timestamp = timezone.make_aware(timestamp, dt_timezone.utc)
 
 
         # 3. Insert raw metric
@@ -74,6 +79,79 @@ def whoami(request):
         "user_id": request.user.id
     })
 
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def login_view(request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    if not username or not password:
+        return Response(
+            {"error": "username and password are required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = authenticate(request, username=username, password=password)
+    if not user:
+        return Response(
+            {"error": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    login(request, user)
+
+    return Response({
+        "id": user.id,
+        "username": user.username,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    logout(request)
+    return Response({"message": "Logged out"})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def signup_view(request):
+    name = request.data.get("name")
+    email = request.data.get("email")
+    password = request.data.get("password")
+
+    if not name or not email or not password:
+        return Response(
+            {"error": "name, email, and password are required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if User.objects.filter(email=email).exists():
+        return Response(
+            {"error": "Email already exists"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        validate_password(password)
+    except ValidationError as e:
+        return Response(
+            {"error": list(e.messages)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Create user with explicit password hashing
+    user = User(username=email, email=email, first_name=name)
+    user.set_password(password)  # Ensures password is hashed
+    user.save()
+
+    return Response(
+        {"message": "User created successfully"},
+        status=status.HTTP_201_CREATED,
+    )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def list_projects(request):
@@ -89,6 +167,40 @@ def list_projects(request):
     ]
 
     return Response(data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_project(request):
+    name = request.data.get("name")
+    if not name:
+        return Response(
+            {"error": "name is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    project = Project.objects.create(owner=request.user, name=name)
+
+    api_key = (
+        APIKey.objects.filter(project=project, is_active=True)
+        .order_by("-created_at")
+        .first()
+    )
+    if not api_key:
+        api_key = APIKey.objects.create(
+            project=project,
+            key=generate_api_key(),
+        )
+
+    return Response(
+        {
+            "id": str(project.id),
+            "name": project.name,
+            "api_key": api_key.key,
+            "created_at": project.created_at,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -127,15 +239,40 @@ def list_aggregated_metrics(request, project_id):
     start = request.GET.get("from")
     end = request.GET.get("to")
 
+    if bucket not in {"1m", "5m", "1h"}:
+        return Response(
+            {"error": "Invalid bucket value"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def parse_to_utc(value):
+        if not value:
+            return None
+        parsed = parse_datetime(value)
+        if not parsed:
+            return "invalid"
+        if timezone.is_naive(parsed):
+            return timezone.make_aware(parsed, dt_timezone.utc)
+        return parsed.astimezone(dt_timezone.utc)
+
+    start_dt = parse_to_utc(start)
+    end_dt = parse_to_utc(end)
+
+    if start_dt == "invalid" or end_dt == "invalid":
+        return Response(
+            {"error": "Invalid datetime format"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     qs = AggregatedMetric.objects.filter(
         project=project,
         bucket_size=bucket,
     )
 
-    if start:
-        qs = qs.filter(bucket_start__gte=start)
-    if end:
-        qs = qs.filter(bucket_start__lte=end)
+    if start_dt:
+        qs = qs.filter(bucket_start__gte=start_dt)
+    if end_dt:
+        qs = qs.filter(bucket_start__lte=end_dt)
 
     qs = qs.order_by("bucket_start")
 

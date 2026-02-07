@@ -16,13 +16,29 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from core.views import IngestMetricView,whoami,list_projects, list_raw_metrics, list_aggregated_metrics, get_alerts, get_policies
+from core.views import (
+    IngestMetricView,
+    whoami,
+    login_view,
+    logout_view,
+    signup_view,
+    list_projects,
+    create_project,
+    list_raw_metrics,
+    list_aggregated_metrics,
+    get_alerts,
+    get_policies,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/ingest", IngestMetricView.as_view()),
+    path("api/login", login_view),
+    path("api/logout", logout_view),
+    path("api/signup", signup_view),
     path("api/whoami", whoami),
     path("api/projects", list_projects),
+    path("api/projects/create", create_project),
     path("api/projects/<uuid:project_id>/metrics", list_raw_metrics),
     path("api/projects/<uuid:project_id>/metrics/aggregated",list_aggregated_metrics),
     path("api/projects/<uuid:project_id>/policies", get_policies),
