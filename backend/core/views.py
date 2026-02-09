@@ -86,29 +86,38 @@ def list_projects(request):
 @api_view(["POST"])
 def create_project(request):
     name = request.data.get("name")
+    email = request.data.get("email")
+
     if not name:
         return Response(
             {"error": "name is required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    project = Project.objects.create(owner=None, name=name)
-
-    api_key = (
-        APIKey.objects.filter(project=project, is_active=True)
-        .order_by("-created_at")
-        .first()
-    )
-    if not api_key:
-        api_key = APIKey.objects.create(
-            project=project,
-            key=generate_api_key(),
+    if not email:
+        return Response(
+            {"error": "email is required"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
+
+    # Create project (auth-free)
+    project = Project.objects.create(
+        owner=None,
+        name=name,
+        email=email,
+    )
+
+    # BUG FIX: The post_save signal in signals.py already creates an APIKey for new projects.
+    # Previously, we were creating a second API key here, causing duplicates.
+    # Now we fetch the existing API key that was created by the signal handler.
+    # This guarantees exactly ONE API key per project.
+    api_key = APIKey.objects.get(project=project)
 
     return Response(
         {
             "id": str(project.id),
             "name": project.name,
+            "email": project.email,
             "api_key": api_key.key,
             "created_at": project.created_at,
         },
@@ -195,26 +204,111 @@ def list_aggregated_metrics(request, project_id):
         for m in qs
     ])
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 def get_policies(request, project_id):
     project = get_object_or_404(
         Project, id=project_id
     )
+    if request.method == "GET":
+        policies = AlertPolicy.objects.filter(project=project)
 
-    policies = AlertPolicy.objects.filter(project=project)
+        return Response([
+            {
+                "id": p.id,
+                "metric": p.metric,
+                "comparison": p.comparison,
+                "threshold": p.threshold,
+                "cooldown_minutes": p.cooldown_minutes,
+                "severity": p.severity,
+                "is_active": p.is_active,
+            }
+            for p in policies
+        ])
 
-    return Response([
-        {
-            "id": p.id,
-            "metric": p.metric,
-            "comparison": p.comparison,
-            "threshold": p.threshold,
-            "cooldown_minutes": p.cooldown_minutes,
-            "severity": p.severity,
-            "is_active": p.is_active,
-        }
-        for p in policies
-    ])
+    elif request.method == "POST":
+        # Validate required fields
+        name = request.data.get("name")
+        metric = request.data.get("metric")
+        comparison = request.data.get("comparison")
+        threshold = request.data.get("threshold")
+        severity = request.data.get("severity")
+
+        if not name:
+            return Response(
+                {"error": "name is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not metric:
+            return Response(
+                {"error": "metric is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if metric not in ["latency_p95", "error_rate", "throughput"]:
+            return Response(
+                {"error": "metric must be one of: latency_p95, error_rate, throughput"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not comparison:
+            return Response(
+                {"error": "comparison is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if comparison not in [">", "<"]:
+            return Response(
+                {"error": "comparison must be > or <"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if threshold is None:
+            return Response(
+                {"error": "threshold is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not severity:
+            return Response(
+                {"error": "severity is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if severity not in ["info", "warn", "critical"]:
+            return Response(
+                {"error": "severity must be one of: info, warn, critical"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get cooldown_minutes (default to 15)
+        cooldown_minutes = request.data.get("cooldown_minutes", 15)
+
+        # Create the alert policy
+        policy = AlertPolicy.objects.create(
+            project=project,
+            name=name,
+            metric=metric,
+            comparison=comparison,
+            threshold=float(threshold),
+            severity=severity,
+            cooldown_minutes=cooldown_minutes,
+            is_active=True,
+        )
+
+        return Response(
+            {
+                "id": policy.id,
+                "name": policy.name,
+                "metric": policy.metric,
+                "comparison": policy.comparison,
+                "threshold": policy.threshold,
+                "severity": policy.severity,
+                "cooldown_minutes": policy.cooldown_minutes,
+                "is_active": policy.is_active,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 @api_view(["GET"])
 def get_alerts(request, project_id):

@@ -28,11 +28,11 @@ from core.views import (
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/ingest", IngestMetricView.as_view()),
-    path("api/projects", list_projects),
-    path("api/projects/create", create_project),
-    path("api/projects/<uuid:project_id>/metrics", list_raw_metrics),
-    path("api/projects/<uuid:project_id>/metrics/aggregated",list_aggregated_metrics),
-    path("api/projects/<uuid:project_id>/policies", get_policies),
-    path("api/projects/<uuid:project_id>/alerts", get_alerts),
+    path("api/ingest/", IngestMetricView.as_view()),
+    path("api/projects/", list_projects),
+    path("api/projects/create/", create_project),
+    path("api/projects/<uuid:project_id>/metrics/", list_raw_metrics),
+    path("api/projects/<uuid:project_id>/metrics/aggregated/",list_aggregated_metrics),
+    path("api/projects/<uuid:project_id>/policies/", get_policies),
+    path("api/projects/<uuid:project_id>/alerts/", get_alerts),
 ]
