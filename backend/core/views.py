@@ -1,8 +1,4 @@
 from django.shortcuts import render, get_object_or_404
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,8 +6,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from datetime import timezone as dt_timezone
 from .models import APIKey, RequestMetric, Project, AggregatedMetric, AlertPolicy, AlertEvent, generate_api_key
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view
 
 class IngestMetricView(APIView):
     authentication_classes = []
@@ -71,91 +66,10 @@ class IngestMetricView(APIView):
         # 4. Return immediately
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def whoami(request):
-    return Response({
-        "username": request.user.username,
-        "user_id": request.user.id
-    })
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def login_view(request):
-    username = request.data.get("username")
-    password = request.data.get("password")
-
-    if not username or not password:
-        return Response(
-            {"error": "username and password are required"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    user = authenticate(request, username=username, password=password)
-    if not user:
-        return Response(
-            {"error": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    login(request, user)
-
-    return Response({
-        "id": user.id,
-        "username": user.username,
-    })
-
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def logout_view(request):
-    logout(request)
-    return Response({"message": "Logged out"})
-
-
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def signup_view(request):
-    name = request.data.get("name")
-    email = request.data.get("email")
-    password = request.data.get("password")
-
-    if not name or not email or not password:
-        return Response(
-            {"error": "name, email, and password are required"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    if User.objects.filter(email=email).exists():
-        return Response(
-            {"error": "Email already exists"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        validate_password(password)
-    except ValidationError as e:
-        return Response(
-            {"error": list(e.messages)},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # Create user with explicit password hashing
-    user = User(username=email, email=email, first_name=name)
-    user.set_password(password)  # Ensures password is hashed
-    user.save()
-
-    return Response(
-        {"message": "User created successfully"},
-        status=status.HTTP_201_CREATED,
-    )
-
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
 def list_projects(request):
-    projects = Project.objects.filter(owner=request.user)
+    projects = Project.objects.all()
 
     data = [
         {
@@ -170,7 +84,6 @@ def list_projects(request):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
 def create_project(request):
     name = request.data.get("name")
     if not name:
@@ -179,7 +92,7 @@ def create_project(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    project = Project.objects.create(owner=request.user, name=name)
+    project = Project.objects.create(owner=None, name=name)
 
     api_key = (
         APIKey.objects.filter(project=project, is_active=True)
@@ -203,12 +116,10 @@ def create_project(request):
     )
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
 def list_raw_metrics(request, project_id):
     project = get_object_or_404(
         Project,
         id=project_id,
-        owner=request.user,
     )
 
     metrics = RequestMetric.objects.filter(project=project).order_by("-timestamp")[:100]
@@ -227,12 +138,10 @@ def list_raw_metrics(request, project_id):
     return Response(data)
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
 def list_aggregated_metrics(request, project_id):
     project = get_object_or_404(
         Project,
         id=project_id,
-        owner=request.user,
     )
 
     bucket = request.GET.get("bucket", "1m")
@@ -287,10 +196,9 @@ def list_aggregated_metrics(request, project_id):
     ])
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
 def get_policies(request, project_id):
     project = get_object_or_404(
-        Project, id=project_id, owner=request.user
+        Project, id=project_id
     )
 
     policies = AlertPolicy.objects.filter(project=project)
@@ -309,10 +217,9 @@ def get_policies(request, project_id):
     ])
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
 def get_alerts(request, project_id):
     project = get_object_or_404(
-        Project, id=project_id, owner=request.user
+        Project, id=project_id
     )
 
     alerts = (

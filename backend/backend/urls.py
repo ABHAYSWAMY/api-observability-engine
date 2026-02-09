@@ -18,10 +18,6 @@ from django.contrib import admin
 from django.urls import path
 from core.views import (
     IngestMetricView,
-    whoami,
-    login_view,
-    logout_view,
-    signup_view,
     list_projects,
     create_project,
     list_raw_metrics,
@@ -33,10 +29,6 @@ from core.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/ingest", IngestMetricView.as_view()),
-    path("api/login", login_view),
-    path("api/logout", logout_view),
-    path("api/signup", signup_view),
-    path("api/whoami", whoami),
     path("api/projects", list_projects),
     path("api/projects/create", create_project),
     path("api/projects/<uuid:project_id>/metrics", list_raw_metrics),

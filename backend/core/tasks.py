@@ -112,16 +112,25 @@ def cleanup_raw_metrics_task(self):
 def send_alert_email_task(self, alert_event_id):
     alert = (
         AlertEvent.objects
-        .select_related("policy", "policy__project", "policy__project__owner")
+        .select_related("policy", "policy__project")
         .get(id=alert_event_id)
     )
+
+    project = alert.policy.project
+    recipient_email = project.email
+
+    if not recipient_email:
+        logger.warning(
+            f"No email configured for project {project.id}. Skipping alert email."
+        )
+        return
 
     subject = f"[ALERT] {alert.policy.metric} violated"
 
     body = f"""
 🚨 Alert Triggered
 
-Project: {alert.policy.project.name}
+Project: {project.name}
 Metric: {alert.policy.metric}
 Threshold: {alert.policy.threshold}
 Actual Value: {alert.value}
@@ -132,9 +141,9 @@ Please investigate.
 """
 
     send_mail(
-        subject,
-        body,
-        settings.DEFAULT_FROM_EMAIL,
-        [alert.policy.project.owner.email],
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[recipient_email],
         fail_silently=False,
     )
