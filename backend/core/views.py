@@ -215,6 +215,7 @@ def get_policies(request, project_id):
         return Response([
             {
                 "id": p.id,
+                "name": p.name,
                 "metric": p.metric,
                 "comparison": p.comparison,
                 "threshold": p.threshold,
