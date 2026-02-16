@@ -6,7 +6,8 @@ from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from datetime import timezone as dt_timezone
 from .models import APIKey, RequestMetric, Project, AggregatedMetric, AlertPolicy, AlertEvent, generate_api_key
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 
 class IngestMetricView(APIView):
     authentication_classes = []
@@ -67,6 +68,7 @@ class IngestMetricView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@permission_classes([AllowAny])
 @api_view(["GET"])
 def list_projects(request):
     projects = Project.objects.all()
@@ -82,7 +84,7 @@ def list_projects(request):
 
     return Response(data)
 
-
+@permission_classes([AllowAny])
 @api_view(["POST"])
 def create_project(request):
     name = request.data.get("name")
@@ -124,6 +126,7 @@ def create_project(request):
         status=status.HTTP_201_CREATED,
     )
 
+@permission_classes([AllowAny])
 @api_view(["GET"])
 def list_raw_metrics(request, project_id):
     project = get_object_or_404(
@@ -146,6 +149,7 @@ def list_raw_metrics(request, project_id):
 
     return Response(data)
 
+@permission_classes([AllowAny])
 @api_view(["GET"])
 def list_aggregated_metrics(request, project_id):
     project = get_object_or_404(
@@ -204,6 +208,7 @@ def list_aggregated_metrics(request, project_id):
         for m in qs
     ])
 
+@permission_classes([AllowAny])
 @api_view(["GET", "POST"])
 def get_policies(request, project_id):
     project = get_object_or_404(
@@ -311,6 +316,7 @@ def get_policies(request, project_id):
             status=status.HTTP_201_CREATED,
         )
 
+@permission_classes([AllowAny])
 @api_view(["GET"])
 def get_alerts(request, project_id):
     project = get_object_or_404(
