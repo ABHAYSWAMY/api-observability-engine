@@ -35,7 +35,7 @@ export async function getPolicies(projectId: string) {
     // Fallback: Try direct backend URL if proxy fails (ad blocker might block)
     console.warn("Proxied request failed, trying direct backend URL", err)
     const res = await fetch(
-      `http://localhost:8000/api/projects/${projectId}/policies/`
+      `http://165.22.62.3:8000/api/projects/${projectId}/policies/`
     )
     return handle(res)
   }
@@ -59,7 +59,7 @@ export async function createPolicy(
     // Fallback: Try direct backend URL if proxy fails (ad blocker might block)
     console.warn("Proxied request failed, trying direct backend URL", err)
     const res = await fetch(
-      `http://localhost:8000/api/projects/${projectId}/policies/`,
+      `http://165.22.62.3:8000/api/projects/${projectId}/policies/`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

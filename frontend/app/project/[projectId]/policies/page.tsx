@@ -97,8 +97,8 @@ export default function Policies() {
               <div className="bg-white rounded-lg p-4 border-2 border-red-300 space-y-2 shadow-sm">
                 <p className="font-bold text-red-700">To fix this:</p>
                 <ol className="list-decimal ml-5 space-y-2 text-red-600 text-sm">
-                  <li>Disable your ad blocker for localhost</li>
-                  <li>Or whitelist http://localhost:3000 and http://localhost:8000</li>
+                  <li>Disable your ad blocker for this site</li>
+                  <li>Or whitelist http://localhost:3000 and http://165.22.62.3:8000</li>
                   <li>Then refresh this page</li>
                 </ol>
               </div>
