@@ -1,4 +1,4 @@
-🚀 AI-Enhanced API Monitoring & Alerting System
+🚀 Distributed API Monitoring & Alerting System
 
 A production-style, event-driven API monitoring platform that collects metrics, aggregates them in real-time, evaluates alert policies, and provides intelligent insights with an AI-powered explanation layer.
 
@@ -179,6 +179,20 @@ Database	Neon PostgreSQL
 This setup demonstrates a multi-cloud architecture, where services are decoupled and independently scalable.
 
 
+---
+
+🔐 Environment Variables
+
+Create a .env file in the backend:
+
+SECRET_KEY=your_secret_key
+DATABASE_URL=your_neon_db_url
+EMAIL_HOST_USER=your_email
+EMAIL_HOST_PASSWORD=your_password
+
+
+---
+
 📊 Future Enhancements
 
 📈 Interactive dashboards (Recharts)
@@ -206,6 +220,40 @@ Debugging distributed systems
 Containerization & deployment
 
 Building production-style backend pipelines
+
+
+
+---
+
+💡 Deployment Note (Cost Optimization)
+
+To optimize usage of Neon DB free-tier compute hours, the backend service is intentionally not kept running 24/7.
+
+The backend can be quickly started using Docker when needed
+
+This helps conserve limited database compute resources
+
+Demonstrates practical awareness of cloud cost management in real-world systems
+
+
+
+---
+
+🖼️ Screenshots
+
+All screenshots used in this README are available in the following directory:
+
+frontend/public/
+
+These include:
+
+Docker containers (worker, beat, redis)
+
+Metric monitoring (raw & aggregated)
+
+Policy creation and alert generation
+
+System behavior proofs
 
 
 
