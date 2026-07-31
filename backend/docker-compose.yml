@@ -3,37 +3,33 @@ version: '3.9'
 services:
   web:
     build: .
-    command: gunicorn backend.wsgi:application --bind 0.0.0.0:8000
-    volumes:
-      - .:/app
+    command: gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
     ports:
       - "8000:8000"
     env_file:
       - .env
     depends_on:
       - redis
+    restart: unless-stopped
 
   worker:
     build: .
     command: celery -A backend worker -l info
-    volumes:
-      - .:/app
     env_file:
       - .env
     depends_on:
       - redis
+    restart: unless-stopped
 
   beat:
     build: .
     command: celery -A backend beat -l info
-    volumes:
-      - .:/app
     env_file:
       - .env
     depends_on:
       - redis
+    restart: unless-stopped
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
+    restart: unless-stopped

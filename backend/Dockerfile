@@ -1,31 +1,30 @@
 # Use official Python image
 FROM python:3.11-slim
 
-# Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system deps
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (for caching)
-COPY requirements.txt /app/
+# Copy requirements first
+COPY requirements.txt .
 
-# Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy entire project
-COPY . /app/
+# Copy project
+COPY . .
 
-# Expose Django port
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
 EXPOSE 8000
 
-# Default command (can override in docker-compose)
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Better gunicorn config
+CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

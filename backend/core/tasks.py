@@ -103,13 +103,8 @@ def cleanup_raw_metrics_task(self):
         logger.error(f"Cleanup task failed: {e}")
         raise  # Re-raise for Celery retry logic
 
-@shared_task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=30,
-    retry_kwargs={"max_retries": 3},
-)
-def send_alert_email_task(self, alert_event_id):
+@shared_task
+def send_alert_email_task(alert_event_id):
     alert = (
         AlertEvent.objects
         .select_related("policy", "policy__project")
@@ -125,25 +120,7 @@ def send_alert_email_task(self, alert_event_id):
         )
         return
 
-    subject = f"[ALERT] {alert.policy.metric} violated"
-
-    body = f"""
-🚨 Alert Triggered
-
-Project: {project.name}
-Metric: {alert.policy.metric}
-Threshold: {alert.policy.threshold}
-Actual Value: {alert.value}
-Severity: {alert.policy.severity}
-Triggered At: {alert.triggered_at}
-
-Please investigate.
-"""
-
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[recipient_email],
-        fail_silently=False,
+    logger.info(
+        f"[SIMULATED EMAIL] Alert {alert.id} for project '{project.name}' "
+        f"would have been sent to {recipient_email}."
     )
